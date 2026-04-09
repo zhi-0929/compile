@@ -151,7 +151,7 @@ void Regular2NFA(string expression, int out_number, string out_class) {
         char c = expression[i];
 
         bool start = false;
-        if (c != ')' && c != '|' && c != '*' && !(c == '"' && inQuote)) start = true;
+        if (c != ')'  && c != '*' && !(c == '"' && inQuote) && !(!inQuote && c == '|')) start = true;
 
         if (end && start) { //添加隐式连接符
             while (!op.empty() && op_priority['@'] <= op_priority[op.top()]) {
@@ -249,15 +249,13 @@ void make_NFA() {
     Regular2NFA("\",\"", 28, "SE");
 
     // 标识符：字母或下划线开头，后跟字母、数字或下划线
-    Regular2NFA("[a-zA-Z_][a-zA-Z0-9_]*", INT_MAX, "IDN");
+    Regular2NFA("[a-zA-Z_][a-zA-Z0-9_]*", 29, "IDN");
 
     // 浮点数：包含一个小数点的数字串
-    Regular2NFA("[0]+\".\"[0]+", INT_MAX, "FLOAT");
-    Regular2NFA("[0-1]+\".\"[0-1]+", INT_MAX, "FLOAT");
-    Regular2NFA("[0-9]+\".\"[0-9]+", INT_MAX, "FLOAT");
+    Regular2NFA("[0-9]+\".\"[0-9]+", 30, "FLOAT");
 
     // 整数：数字串
-    Regular2NFA("[0-9]+", INT_MAX, "INT");
+    Regular2NFA("[0-9]+", 31, "INT");
 }
 
 struct DFAnode{
@@ -441,7 +439,6 @@ void minimize_DFA() {
             }
         }
     }
-    // cout << nodes.size() << endl;
 }
 
 void lexical_analyze_file(const string& in_file_name, const string& output_file_name) {
@@ -493,15 +490,14 @@ void lexical_analyze_file(const string& in_file_name, const string& output_file_
         }
 
         if (last_accept_state == -1) {
-            fout << "[LexError] Unexpected character '" << content[i]
-                 << "' at line " << line << ", col " << col << endl;
+            fout << content[i] << "\t<ERROR," << line << "," << col << ">" << endl;
             i++;
             col++;
             continue;
         }
 
         string lexeme = content.substr(i, last_accept_pos - i);
-        if (DFA[last_accept_state].out_number != INT_MAX) {
+        if (DFA[last_accept_state].out_number <= 28) {
             fout << lexeme << "\t<" << DFA[last_accept_state].out_class << "," << DFA[last_accept_state].out_number << ">" << endl;
         } else {
             fout << lexeme << "\t<" << DFA[last_accept_state].out_class << "," << lexeme << ">" << endl;
