@@ -249,15 +249,15 @@ void make_NFA() {
     Regular2NFA("\",\"", 28, "SE");
 
     // 标识符：字母或下划线开头，后跟字母、数字或下划线
-    Regular2NFA("[a-zA-Z_][a-zA-Z0-9_]*", 0, "IDN");
+    Regular2NFA("[a-zA-Z_][a-zA-Z0-9_]*", INT_MAX, "IDN");
 
     // 浮点数：包含一个小数点的数字串
-    Regular2NFA("[0]+\".\"[0]+", 0, "FLOAT");
-    Regular2NFA("[0-1]+\".\"[0-1]+", 0, "FLOAT");
-    Regular2NFA("[0-9]+\".\"[0-9]+", 0, "FLOAT");
+    Regular2NFA("[0]+\".\"[0]+", INT_MAX, "FLOAT");
+    Regular2NFA("[0-1]+\".\"[0-1]+", INT_MAX, "FLOAT");
+    Regular2NFA("[0-9]+\".\"[0-9]+", INT_MAX, "FLOAT");
 
     // 整数：数字串
-    Regular2NFA("[0-9]+", 0, "INT");
+    Regular2NFA("[0-9]+", INT_MAX, "INT");
 }
 
 struct DFAnode{
@@ -266,11 +266,24 @@ struct DFAnode{
     int out_number; //终态时的序号
     string out_class; //终态时的类型
     bool finish; //是否为终态
+    int to_final; //当前的DFA在DFA最小化的过程中属于哪一个集合
     DFAnode() {
         out_number = INT_MAX;
         finish = false;
     }
 }DFA[10005];
+
+struct smallest_DFA_node{
+    map<int, int> next;
+    int out_number; //终态时的序号
+    string out_class; //终态时的类型
+    bool finish; //是否为终态
+    smallest_DFA_node() {
+        out_number = INT_MAX;
+        finish = false;
+    }
+}final_DFA[10005];
+
 int DFA_cnt;
 
 void make_DFAedge(int from, int to, int c) {
@@ -338,11 +351,181 @@ void NFA2DFA() {
 }
 
 void minimize_DFA() {
-    
+    vector<vector<int>> nodes;
+    vector<int> final_state, not_final_state;
+    for (int i = 0; i <= DFA_cnt; i++) {
+        if (DFA[i].finish) {
+            DFA[i].to_final = 1;
+            final_state.push_back(i);
+        } else {
+            DFA[i].to_final = 0;
+            not_final_state.push_back(i);
+        }
+    }
+    nodes.push_back(not_final_state);
+    nodes.push_back(final_state);
+    while (1) {
+        bool new_final_DFA = false;
+        for (int i = 0; i < nodes.size(); i++) {
+            for (auto c : character_set) {
+                int to1 = -2, to2 = -2;
+                char dif = '#';
+                for (auto x : nodes[i]) {
+                    if (DFA[x].next.count(c)) {
+                        if (to1 == -2) to1 = DFA[DFA[x].next[c]].to_final;
+                        else if (to1 != DFA[DFA[x].next[c]].to_final) {
+                            to2 = DFA[DFA[x].next[c]].to_final;
+                            dif = c;
+                            break;
+                        }
+                    } else {
+                        if (to1 == -2) to1 = -1;
+                        else if (to1 != -1) {
+                            to2 = -1;
+                            dif = c;
+                            break;
+                        }
+                    }
+                }
+                if (to2 != -2) {
+                    new_final_DFA = true;
+                    vector<int> old_final_DFA_node, new_final_DFA_node;
+                    for (auto x : nodes[i]) {
+                        int to = -2;
+                        if (DFA[x].next.count(c)) to = DFA[DFA[x].next[c]].to_final;
+                        else to = -1;
+
+                        if (to == to1) {
+                            old_final_DFA_node.push_back(x);
+                        } else {
+                            new_final_DFA_node.push_back(x);
+                            DFA[x].to_final = nodes.size();
+                        }
+                    }
+                    nodes[i] = old_final_DFA_node;
+                    nodes.push_back(new_final_DFA_node);
+                }
+            }
+
+            //考虑终态状态不一致的
+            if (DFA[nodes[i][0]].finish) {
+                vector<int> old_final_DFA_node, new_final_DFA_node;
+                old_final_DFA_node.push_back(nodes[i][0]);
+                for (int j = 1; j < nodes[i].size(); j++) {
+                    if (DFA[nodes[i][j]].out_number != DFA[nodes[i][0]].out_number) {
+                        new_final_DFA_node.push_back(nodes[i][j]);
+                        DFA[nodes[i][j]].to_final = nodes.size();
+                    } else old_final_DFA_node.push_back(nodes[i][j]);
+                }
+                nodes[i] = old_final_DFA_node;
+                if (!new_final_DFA_node.empty()) {
+                    new_final_DFA = true;
+                    nodes.push_back(new_final_DFA_node);
+                }
+            }
+        }
+
+
+        if (!new_final_DFA) {
+            break;
+        }
+    }
+    for (int i = 0; i < nodes.size(); i++) {
+        int now = nodes[i][0];
+        final_DFA[i].finish = DFA[now].finish;
+        final_DFA[i].out_class = DFA[now].out_class;
+        final_DFA[i].out_number = DFA[now].out_number;
+        for (auto x : nodes[i]) {
+            for (auto y : DFA[x].next) {
+                final_DFA[i].next[y.first] = DFA[y.second].to_final;
+            }
+        }
+    }
+    // cout << nodes.size() << endl;
+}
+
+void lexical_analyze_file(const string& in_file_name, const string& output_file_name) {
+    ifstream fin(in_file_name);
+    ofstream fout(output_file_name);
+    if (!fin.is_open()) {
+        cerr << "[Error] Cannot open file: " << in_file_name << endl;
+        return;
+    }
+    if (!fout.is_open()) {
+        cerr << "[Error] Cannot create output file: " << output_file_name << endl;
+        return;
+    }
+
+    string content((istreambuf_iterator<char>(fin)), istreambuf_iterator<char>());
+    size_t i = 0;
+    int line = 1, col = 1;
+
+    while (i < content.size()) {
+        unsigned char uc = static_cast<unsigned char>(content[i]);
+        if (isspace(uc)) {
+            if (content[i] == '\n') {
+                line++;
+                col = 1;
+            } else {
+                col++;
+            }
+            i++;
+            continue;
+        }
+
+        int state = 0;
+        int last_accept_state = -1;
+        size_t last_accept_pos = i;
+
+        size_t j = i;
+        while (j < content.size()) {
+            int ch = static_cast<unsigned char>(content[j]);
+            auto it = DFA[state].next.find(ch);
+            if (it == DFA[state].next.end()) break;
+
+            state = it->second;
+            j++;
+
+            if (DFA[state].finish) {
+                last_accept_state = state;
+                last_accept_pos = j;
+            }
+        }
+
+        if (last_accept_state == -1) {
+            fout << "[LexError] Unexpected character '" << content[i]
+                 << "' at line " << line << ", col " << col << endl;
+            i++;
+            col++;
+            continue;
+        }
+
+        string lexeme = content.substr(i, last_accept_pos - i);
+        if (DFA[last_accept_state].out_number != INT_MAX) {
+            fout << lexeme << "\t<" << DFA[last_accept_state].out_class << "," << DFA[last_accept_state].out_number << ">" << endl;
+        } else {
+            fout << lexeme << "\t<" << DFA[last_accept_state].out_class << "," << lexeme << ">" << endl;
+        }
+
+        for (size_t k = i; k < last_accept_pos; k++) {
+            if (content[k] == '\n') {
+                line++;
+                col = 1;
+            } else {
+                col++;
+            }
+        }
+        i = last_accept_pos;
+    }
 }
 
 int main() {
     make_NFA();
     NFA2DFA();
     minimize_DFA();
+
+    string in_file_name, out_file_name;
+    getline(cin, in_file_name);
+    getline(cin, out_file_name);
+    lexical_analyze_file(in_file_name, out_file_name);
 }
