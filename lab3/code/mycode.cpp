@@ -80,9 +80,9 @@ Regular_edge handle_op(char op, Regular_edge edge1, Regular_edge edge2) {
     return {0, 0};
 }
 
-string solve_expression(string expression) { //这里考虑的尚不全面，也不考虑输入不合法的情况
+string change_expression(string expression) { //这里主要针对C--的情况，不考虑输入不合法的情况
     string res = "";
-    bool inBracket = false; //在inBracket中需要额外加一个|
+    bool inBracket = false; //在[]中需要额外加一个|
     bool inQuote = false; //在""中全部按字面量处理
     for (int i = 0; i < expression.length(); i++) {
         if (expression[i] == '"') {
@@ -151,7 +151,7 @@ string solve_expression(string expression) { //这里考虑的尚不全面，也
 }
 
 void Regular2NFA(string expression, int out_number, string out_class) {
-    expression = solve_expression(expression);
+    expression = change_expression(expression);
     stack<char> op;
     stack<Regular_edge> edge;
     expression = '(' + expression;
@@ -226,7 +226,7 @@ void Regular2NFA(string expression, int out_number, string out_class) {
                 break;
 
             default:
-                cerr << "[Error] Unexpected literal '" << c 
+                cerr << "[Error] Unexpected literal '" << c
                     << "' outside of quotes in expression: " << expression << endl;
                 exit(-1); // 抛出异常
         }
@@ -239,7 +239,6 @@ void Regular2NFA(string expression, int out_number, string out_class) {
 }
 
 void make_NFA() {
-    //关键字
     Regular2NFA("[iI][nN][tT]", 1, "KW");
     Regular2NFA("[vV][oO][iI][dD]", 2, "KW");
     Regular2NFA("[rR][eE][tT][uU][rR][nN]", 3, "KW");
@@ -248,8 +247,6 @@ void make_NFA() {
     Regular2NFA("[fF][lL][oO][aA][tT]", 6, "KW");
     Regular2NFA("[iI][fF]", 7, "KW");
     Regular2NFA("[eE][lL][sS][eE]", 8, "KW");
-
-    //运算符
     Regular2NFA("\"+\"", 9, "OP");
     Regular2NFA("\"-\"", 10, "OP");
     Regular2NFA("\"*\"", 11, "OP");
@@ -264,22 +261,14 @@ void make_NFA() {
     Regular2NFA("\"!=\"", 20, "OP");
     Regular2NFA("\"&&\"", 21, "OP");
     Regular2NFA("\"||\"", 22, "OP");
-
-    // 界符 (SE)
     Regular2NFA("\"(\"", 23, "SE");
     Regular2NFA("\")\"", 24, "SE");
     Regular2NFA("\"{\"", 25, "SE");
     Regular2NFA("\"}\"", 26, "SE");
     Regular2NFA("\";\"", 27, "SE");
     Regular2NFA("\",\"", 28, "SE");
-
-    // 标识符：字母或下划线开头，后跟字母、数字或下划线
     Regular2NFA("[a-zA-Z_][a-zA-Z0-9_]*", 29, "IDN");
-
-    // 浮点数：包含一个小数点的数字串
     Regular2NFA("[0-9]+\".\"[0-9]+", 30, "FLOAT");
-
-    // 整数：数字串
     Regular2NFA("[0-9]+", 31, "INT");
 }
 
@@ -288,10 +277,10 @@ void make_DFAedge(int from, int to, int c) {
 }
 
 void NFA2DFA() {
-    map<set<int>, int> visited;
-    set<int> DFA_start = {0};
+    map<set<int>, int> visited; //代表该NFA集合是否作为DFA节点出现过
+    set<int> DFA_start = {0}; //起始DFA节点
     queue<int> q; q.push(0);
-    while (!q.empty()) {
+    while (!q.empty()) { //构建起始DFA节点
         int now = q.front(); q.pop();
         for (auto x : NFA[now].next) {
             if (x.in == EPSILON && DFA_start.find(x.to) == DFA_start.end()) {
@@ -303,10 +292,10 @@ void NFA2DFA() {
     DFA[0].from_NFA = DFA_start;
 
     set<int> st;
-    for (int i = 0; i <= DFA_cnt; i++) {
+    for (int i = 0; i <= DFA_cnt; i++) { //扩展新的DFA节点
         for (auto c : character_set) {
             st.clear();
-            for (auto From : DFA[i].from_NFA) {
+            for (auto From : DFA[i].from_NFA) { //st存根据DFA[i]中根据字符c转移后的节点
                 for (auto To : NFA[From].next) {
                     if (To.in == c) {
                         st.insert(To.to);
@@ -315,7 +304,7 @@ void NFA2DFA() {
             }
             if (st.empty()) continue;
             for (auto x : st) q.push(x);
-            while (!q.empty()) {
+            while (!q.empty()) { //求st中节点的EPSILON闭包
                 int now = q.front(); q.pop();
                 for (auto x : NFA[now].next) {
                     if (x.in == EPSILON && st.find(x.to) == st.end()) {
@@ -323,9 +312,9 @@ void NFA2DFA() {
                     }
                 }
             }
-            if (visited.count(st)) {
+            if (visited.count(st)) { //出现过就连边
                 make_DFAedge(i, visited[st], c);
-            } else {
+            } else { //新出现就建新的DFA节点
                 ++DFA_cnt;
                 visited[st] = DFA_cnt;
                 DFA[DFA_cnt].from_NFA = st;
@@ -334,7 +323,7 @@ void NFA2DFA() {
         }
     }
 
-    for (int i = 0; i <= DFA_cnt; i++) {
+    for (int i = 0; i <= DFA_cnt; i++) { //定义终结状态
         for (auto x : DFA[i].from_NFA) {
             if (NFA[x].finish) {
                 DFA[i].finish = true;
@@ -349,6 +338,7 @@ void NFA2DFA() {
 
 void minimize_DFA() {
     vector<vector<int>> nodes;
+    //初始按照是否为终态分成两个集合
     vector<int> final_state, not_final_state;
     for (int i = 0; i <= DFA_cnt; i++) {
         if (DFA[i].finish) {
@@ -362,29 +352,26 @@ void minimize_DFA() {
     nodes.push_back(not_final_state);
     nodes.push_back(final_state);
     while (1) {
-        bool new_final_DFA = false;
+        bool new_final_DFA = false; //如果一整轮遍历没有出现新的集合就可以中断循环
         for (int i = 0; i < nodes.size(); i++) {
             for (auto c : character_set) {
-                int to1 = -2, to2 = -2;
-                char dif = '#';
+                int to1 = -2, to2 = -2; //记录该集合由字符c转移，是否指向不同的集合下标，其中不存在转移记为-1
                 for (auto x : nodes[i]) {
                     if (DFA[x].next.count(c)) {
                         if (to1 == -2) to1 = DFA[DFA[x].next[c]].to_final;
                         else if (to1 != DFA[DFA[x].next[c]].to_final) {
                             to2 = DFA[DFA[x].next[c]].to_final;
-                            dif = c;
                             break;
                         }
                     } else {
                         if (to1 == -2) to1 = -1;
                         else if (to1 != -1) {
                             to2 = -1;
-                            dif = c;
                             break;
                         }
                     }
                 }
-                if (to2 != -2) {
+                if (to2 != -2) { //说明指向多种集合下标，将不同于to1的节点拿出，作为新的集合放到最后
                     new_final_DFA = true;
                     vector<int> old_final_DFA_node, new_final_DFA_node;
                     for (auto x : nodes[i]) {
@@ -404,8 +391,7 @@ void minimize_DFA() {
                 }
             }
 
-            //考虑终态状态不一致的
-            if (DFA[nodes[i][0]].finish) {
+            if (DFA[nodes[i][0]].finish) { //考虑终态状态不一致的情况，如果终态的number不同则需要分开
                 vector<int> old_final_DFA_node, new_final_DFA_node;
                 old_final_DFA_node.push_back(nodes[i][0]);
                 for (int j = 1; j < nodes[i].size(); j++) {
@@ -422,11 +408,11 @@ void minimize_DFA() {
             }
         }
 
-
         if (!new_final_DFA) {
             break;
         }
     }
+
     for (int i = 0; i < nodes.size(); i++) {
         int now = nodes[i][0];
         final_DFA[i].finish = DFA[now].finish;
@@ -515,12 +501,12 @@ void lexical_analyze(const string& in_file_name, const string& output_file_name)
 }
 
 int main() {
-    make_NFA();
-    NFA2DFA();
-    minimize_DFA();
+    make_NFA(); //正则转NFA
+    NFA2DFA(); //NFA转DFA
+    minimize_DFA(); //最小化DFA
 
     string in_file_name, out_file_name;
     getline(cin, in_file_name);
     getline(cin, out_file_name);
-    lexical_analyze(in_file_name, out_file_name);
+    lexical_analyze(in_file_name, out_file_name); //词法分析
 }
