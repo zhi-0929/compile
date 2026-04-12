@@ -3,8 +3,8 @@ using namespace std;
 
 #define EPSILON -1
 
-struct NFAedge{
-    int in; //接收到in转移到to
+struct NFAedge{  //接收到in转移到to
+    int in;
     int to;
 };
 struct NFAnode{
@@ -15,23 +15,48 @@ struct NFAnode{
 }NFA[10005];
 int NFA_cnt = 0;
 
-struct Regular_edge{
+struct Regular_edge{ //正则表达式转为NFA过程中表示
     int from, to;
 };
 
-unordered_set<int> character_set;
+map<char, int> op_priority = {
+    {'*', 3},
+    {'@', 2}, //表示连接符
+    {'|', 1},
+    {'(', 0}
+};
+
+unordered_set<int> character_set; //记录都出现过什么符号
+
+struct DFAnode{ //从NFA转换的DFA节点
+    map<int, int> next;
+    set<int> from_NFA; //包含了NFA的哪些点
+    int out_number; //终态时的序号
+    string out_class; //终态时的类型
+    bool finish; //是否为终态
+    int to_final; //当前的DFA在DFA最小化的过程中属于哪一个集合
+    DFAnode() {
+        out_number = INT_MAX;
+        finish = false;
+    }
+}DFA[10005];
+int DFA_cnt;
+
+struct smallest_DFA_node{ //最小化后的DFA节点
+    map<int, int> next;
+    int out_number; //终态时的序号
+    string out_class; //终态时的类型
+    bool finish; //是否为终态
+    smallest_DFA_node() {
+        out_number = INT_MAX;
+        finish = false;
+    }
+}final_DFA[10005];
 
 void make_NFAedge(int from, int to, int c) {
     NFA[from].next.push_back({c, to});
     if (c != EPSILON) character_set.insert(c);
 }
-
-std::map<char, int> op_priority = {
-    {'*', 3},
-    {'@', 2}, //表示连接
-    {'|', 1},
-    {'(', 0}
-};
 
 Regular_edge handle_op(char op, Regular_edge edge1, Regular_edge edge2) {
     if (op == '*') {
@@ -203,7 +228,7 @@ void Regular2NFA(string expression, int out_number, string out_class) {
             default:
                 cerr << "[Error] Unexpected literal '" << c 
                     << "' outside of quotes in expression: " << expression << endl;
-                exit(-1); // 或者抛出异常，强制你检查正则写法
+                exit(-1); // 抛出异常
         }
     }
     make_NFAedge(0, edge.top().from, EPSILON); //连接到开始起点
@@ -257,32 +282,6 @@ void make_NFA() {
     // 整数：数字串
     Regular2NFA("[0-9]+", 31, "INT");
 }
-
-struct DFAnode{
-    map<int, int> next;
-    set<int> from_NFA; //包含了NFA的哪些点
-    int out_number; //终态时的序号
-    string out_class; //终态时的类型
-    bool finish; //是否为终态
-    int to_final; //当前的DFA在DFA最小化的过程中属于哪一个集合
-    DFAnode() {
-        out_number = INT_MAX;
-        finish = false;
-    }
-}DFA[10005];
-
-struct smallest_DFA_node{
-    map<int, int> next;
-    int out_number; //终态时的序号
-    string out_class; //终态时的类型
-    bool finish; //是否为终态
-    smallest_DFA_node() {
-        out_number = INT_MAX;
-        finish = false;
-    }
-}final_DFA[10005];
-
-int DFA_cnt;
 
 void make_DFAedge(int from, int to, int c) {
     DFA[from].next[c] = to;
@@ -441,7 +440,7 @@ void minimize_DFA() {
     }
 }
 
-void lexical_analyze_file(const string& in_file_name, const string& output_file_name) {
+void lexical_analyze(const string& in_file_name, const string& output_file_name) {
     ifstream fin(in_file_name);
     ofstream fout(output_file_name);
     if (!fin.is_open()) {
@@ -523,5 +522,5 @@ int main() {
     string in_file_name, out_file_name;
     getline(cin, in_file_name);
     getline(cin, out_file_name);
-    lexical_analyze_file(in_file_name, out_file_name);
+    lexical_analyze(in_file_name, out_file_name);
 }

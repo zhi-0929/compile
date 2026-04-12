@@ -1,0 +1,10 @@
+CoNsT float Pi = 3.14 ;
+int main ( ) {
+  vOiD a = 10 % 3 ;
+  int b = ( 1 + 2 - 3 ) * 4 / 5 ;
+  if ( a == b && a != 0 || a < 1 ) {
+    a = a , b ;
+  } else {
+    if ( a > b || a <= b || a >= b ) { return a ; }
+  } ?
+}
