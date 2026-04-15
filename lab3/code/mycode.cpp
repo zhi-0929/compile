@@ -413,7 +413,7 @@ void minimize_DFA() {
         }
     }
 
-    for (int i = 0; i < nodes.size(); i++) {
+    for (int i = 0; i < nodes.size(); i++) { //将nodes中的DFA节点集合作为最小化后的DFA节点
         int now = nodes[i][0];
         final_DFA[i].finish = DFA[now].finish;
         final_DFA[i].out_class = DFA[now].out_class;
@@ -439,64 +439,39 @@ void lexical_analyze(const string& in_file_name, const string& output_file_name)
     }
 
     string content((istreambuf_iterator<char>(fin)), istreambuf_iterator<char>());
-    size_t i = 0;
+
+    int l = 0, r = 0;
     int line = 1, col = 1;
-
-    while (i < content.size()) {
-        unsigned char uc = static_cast<unsigned char>(content[i]);
-        if (isspace(uc)) {
-            if (content[i] == '\n') {
-                line++;
-                col = 1;
-            } else {
-                col++;
-            }
-            i++;
-            continue;
-        }
-
-        int state = 0;
-        int last_accept_state = -1;
-        size_t last_accept_pos = i;
-
-        size_t j = i;
-        while (j < content.size()) {
-            int ch = static_cast<unsigned char>(content[j]);
-            auto it = DFA[state].next.find(ch);
-            if (it == DFA[state].next.end()) break;
-
-            state = it->second;
-            j++;
-
-            if (DFA[state].finish) {
-                last_accept_state = state;
-                last_accept_pos = j;
-            }
-        }
-
-        if (last_accept_state == -1) {
-            fout << content[i] << "\t<ERROR," << line << "," << col << ">" << endl;
-            i++;
-            col++;
-            continue;
-        }
-
-        string lexeme = content.substr(i, last_accept_pos - i);
-        if (DFA[last_accept_state].out_number <= 28) {
-            fout << lexeme << "\t<" << DFA[last_accept_state].out_class << "," << DFA[last_accept_state].out_number << ">" << endl;
+    while (r < content.size()) {
+        while (r < content.size() && !isspace(content[r])) r++;
+        if (r == l) {
+            if (content[l] == '\n') {
+                line++; col = 1;
+            } else col++;
+            ++l; ++r;
         } else {
-            fout << lexeme << "\t<" << DFA[last_accept_state].out_class << "," << lexeme << ">" << endl;
-        }
-
-        for (size_t k = i; k < last_accept_pos; k++) {
-            if (content[k] == '\n') {
-                line++;
-                col = 1;
-            } else {
-                col++;
+            int state = 0;
+            int tar = -1;
+            for (int i = l; i <= r; i++) {
+                if (i == r) {
+                    if (final_DFA[state].finish) tar = final_DFA[state].out_number;
+                    break;
+                }
+                auto it = final_DFA[state].next.find(content[i]);
+                if (it == final_DFA[state].next.end()) break;
+                state = it->second;
+            }
+            if (tar != -1) {
+                string lexeme = content.substr(l, r - l);
+                if (final_DFA[tar].out_number <= 28) {
+                    fout << lexeme << "\t<" << final_DFA[tar].out_class
+                        << "," << final_DFA[tar].out_number << ">" << endl;
+                } else {
+                    fout << lexeme << "\t<" << final_DFA[tar].out_class
+                        << "," << lexeme << ">" << endl;
+                }
             }
         }
-        i = last_accept_pos;
     }
 }
 
